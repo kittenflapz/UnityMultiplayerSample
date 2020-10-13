@@ -8,13 +8,52 @@ namespace NetworkMessages
         PLAYER_UPDATE,
         SERVER_UPDATE,
         HANDSHAKE,
-        PLAYER_INPUT
+        PLAYER_INPUT,
+        CONNECTION_MSG,
+        NEW_CLIENT,
+         DROPPED_CLIENT,
+         ALREADY_HERE
+           
     }
 
     [System.Serializable]
     public class NetworkHeader{
         public Commands cmd;
     }
+
+    [System.Serializable]
+    public class InitializeConnectionMsg : NetworkHeader 
+    {
+        public string yourID;
+        public InitializeConnectionMsg()
+        {
+            cmd = Commands.CONNECTION_MSG;
+            yourID = "";
+        }
+    }
+
+    [System.Serializable]
+    public class AlreadyHereMsg : NetworkHeader
+    {
+        public List<NetworkObjects.NetworkPlayer> players;
+        public AlreadyHereMsg()
+        {
+            cmd = Commands.ALREADY_HERE;
+            players = new List<NetworkObjects.NetworkPlayer>();
+        }
+    }
+
+    [System.Serializable]
+    public class NewClientMsg : NetworkHeader
+    {
+        public NetworkObjects.NetworkPlayer player;
+        public NewClientMsg()
+        {
+            cmd = Commands.NEW_CLIENT;
+            player = new NetworkObjects.NetworkPlayer();
+        }
+    }
+
 
     [System.Serializable]
     public class HandshakeMsg:NetworkHeader{
@@ -34,6 +73,19 @@ namespace NetworkMessages
         }
     };
 
+    [System.Serializable]
+    public class DroppedClientMsg : NetworkHeader
+    {
+        public NetworkObjects.NetworkPlayer player;
+        public DroppedClientMsg()
+        {      // Constructor
+            cmd = Commands.DROPPED_CLIENT;
+            player = new NetworkObjects.NetworkPlayer();
+        }
+    };
+
+
+    [System.Serializable]
     public class PlayerInputMsg:NetworkHeader{
         public Input myInput;
         public PlayerInputMsg(){

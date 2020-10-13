@@ -5,24 +5,61 @@ using Unity.Networking.Transport;
 using NetworkMessages;
 using System;
 using System.Text;
+using System.Collections.Generic;
+using System.Collections;
 
 public class NetworkServer : MonoBehaviour
 {
     public NetworkDriver m_Driver;
     public ushort serverPort;
     private NativeList<NetworkConnection> m_Connections;
+    public List<NetworkObjects.NetworkPlayer> m_Players; // A list of players
 
     void Start ()
     {
         m_Driver = NetworkDriver.Create();
         var endpoint = NetworkEndPoint.AnyIpv4;
         endpoint.Port = serverPort;
+
         if (m_Driver.Bind(endpoint) != 0)
             Debug.Log("Failed to bind to port " + serverPort);
         else
             m_Driver.Listen();
 
         m_Connections = new NativeList<NetworkConnection>(16, Allocator.Persistent);
+
+        //StartCoroutine(SendHandshakeToAllClient());
+        StartCoroutine(SendUpdateToAllClients());
+    }
+
+    //IEnumerator SendHandshakeToAllClient()
+    //{
+    //    while(true)
+    //    {
+    //        for (int i = 0; i < m_Connections.Length; i++)
+    //        {
+    //            if (!m_Connections[i].IsCreated)
+    //                continue;
+    //            HandshakeMsg m = new HandshakeMsg();
+    //            m.player.id = m_Connections[i].InternalId.ToString();
+    //            SendToClient(JsonUtility.ToJson(m), m_Connections[i]);
+    //        }
+    //        yield return new WaitForSeconds(2);
+    //    }
+    //}
+
+    IEnumerator SendUpdateToAllClients()
+    {
+        while (true)
+        {
+            for (int i = 0; i < m_Connections.Length; i++)
+            {
+                if (!m_Connections[i].IsCreated)
+                    continue;
+                ServerUpdate(m_Connections[i]);
+            }
+            yield return new WaitForSeconds(2);
+        }
     }
 
     void SendToClient(string message, NetworkConnection c){
@@ -37,14 +74,37 @@ public class NetworkServer : MonoBehaviour
         m_Connections.Dispose();
     }
 
-    void OnConnect(NetworkConnection c){
-        m_Connections.Add(c);
-        Debug.Log("Accepted a connection");
+    void OnConnect(NetworkConnection c)
+    {
+        // send info of newly connected client to currently connected clients
+        foreach (NetworkConnection currentlyConnectedClient in m_Connections)
+        { 
+            NewClientMsg ncMsg = new NewClientMsg();
+            ncMsg.player.id = c.InternalId.ToString();
+            SendToClient(JsonUtility.ToJson(ncMsg), currentlyConnectedClient);
+        }
 
-        //// Example to send a handshake message:
-        // HandshakeMsg m = new HandshakeMsg();
-        // m.player.id = c.InternalId.ToString();
-        // SendToClient(JsonUtility.ToJson(m),c);        
+        m_Connections.Add(c);
+        var newPlayersId = c.InternalId;
+        var connMsg = new InitializeConnectionMsg();
+        connMsg.yourID = newPlayersId.ToString();
+        SendToClient(JsonUtility.ToJson(connMsg), c);
+
+  
+
+        // add this player to our list of players
+        NetworkObjects.NetworkPlayer newPlayer = new NetworkObjects.NetworkPlayer();
+        newPlayer.id = c.InternalId.ToString();
+        m_Players.Add(newPlayer);
+        Debug.Log("New player connected. Current list of players: ");
+        // Sending the list of players currently connected (including this one) to the client (so client can spawn them)
+        AlreadyHereMsg ahMsg = new AlreadyHereMsg();
+        foreach(NetworkObjects.NetworkPlayer player in m_Players)
+        {
+            ahMsg.players.Add(player);
+            Debug.Log(player.id);
+        }
+        SendToClient(JsonUtility.ToJson(ahMsg), c);
     }
 
     void OnData(DataStreamReader stream, int i){
@@ -60,7 +120,8 @@ public class NetworkServer : MonoBehaviour
             break;
             case Commands.PLAYER_UPDATE:
             PlayerUpdateMsg puMsg = JsonUtility.FromJson<PlayerUpdateMsg>(recMsg);
-            Debug.Log("Player update message received!");
+            OnPlayerUpdate(puMsg);
+            //Debug.Log("Player update message received!");
             break;
             case Commands.SERVER_UPDATE:
             ServerUpdateMsg suMsg = JsonUtility.FromJson<ServerUpdateMsg>(recMsg);
@@ -74,6 +135,14 @@ public class NetworkServer : MonoBehaviour
 
     void OnDisconnect(int i){
         Debug.Log("Client disconnected from server");
+        foreach (var player in m_Players)
+        {
+            if (player.id == i.ToString())
+            {
+                m_Players.Remove(player);
+                break;
+            }
+        }
         m_Connections[i] = default(NetworkConnection);
     }
 
@@ -126,4 +195,27 @@ public class NetworkServer : MonoBehaviour
             }
         }
     }
+
+
+    void ServerUpdate(NetworkConnection c)
+    {
+        var updateMsg = new ServerUpdateMsg();
+        updateMsg.players = m_Players;
+        Debug.Log("Current list of players: ");
+        foreach (NetworkObjects.NetworkPlayer player in m_Players)
+        {
+            Debug.Log("ID: " + player.id);
+        }
+        SendToClient(JsonUtility.ToJson(updateMsg), c);
+    }
+
+    void OnPlayerUpdate(PlayerUpdateMsg _puMsg)
+    {
+
+
+        // Eventually, update our list of players with the player's cube pos
+
+
+    }
+
 }
