@@ -21,9 +21,6 @@ public class NetworkServer : MonoBehaviour
     public Vector3 closestMine;
     private float maxDistance = 45; // the furthest the player could be from a mine
 
-    private float lastHeartbeatSent;
-    private float lastColourSent;
-
     void Start()
     {
 
